@@ -1,4 +1,4 @@
-# utils/voice_utils.py - Improved Credit Detection (Final Fix)
+# utils/voice_utils.py - Final Cloud-Compatible Version
 
 import streamlit as st
 import whisper
@@ -9,7 +9,16 @@ import tempfile
 import os
 from io import BytesIO
 
-from audiorecorder import audiorecorder
+# Safe import for Streamlit Cloud
+try:
+    from audiorecorder import audiorecorder
+except ImportError:
+    try:
+        from streamlit_audiorecorder import audiorecorder
+    except ImportError:
+        st.error("❌ 'streamlit-audiorecorder' package is missing. Please check requirements.txt")
+        st.stop()
+
 from pydub import AudioSegment
 
 # ============================================
@@ -49,7 +58,7 @@ def transcribe_audio(audio_segment, model):
             initial_prompt=(
                 "This is an expense tracker. "
                 "Examples: spent 500 on food, paid 1200 electricity bill, "
-                "received salary 50000, uncle gave me 500 rupees, added to my credit, "
+                "received salary 50000, uncle gave me 500 rupees added to credit, "
                 "salary mila, petrol kharcha 300."
             ),
             temperature=0,
@@ -67,7 +76,7 @@ def transcribe_audio(audio_segment, model):
                 pass
 
 # ============================================
-# Better Parser with Strong Credit Priority
+# Parser (Improved Credit Detection)
 # ============================================
 WORD_TO_NUM = {
     "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
@@ -90,7 +99,6 @@ def parse_natural_command(text: str) -> dict:
     amounts = re.findall(r'\b(\d+(?:,\d{3})*(?:\.\d{1,2})?)\b', normalized)
     amount = max([float(a.replace(',', '')) for a in amounts]) if amounts else None
 
-    # ==================== STRONGER CREDIT DETECTION ====================
     strong_credit_phrases = [
         'gave me', 'uncle gave', 'aunty gave', 'received', 'salary', 'income', 
         'credited', 'credit amount', 'added to credit', 'add to my credit', 
@@ -100,23 +108,15 @@ def parse_natural_command(text: str) -> dict:
     credit_keywords = ['salary', 'income', 'credited', 'received', 'refund', 'bonus', 'deposit', 'credit', 'mila', 'got']
     debit_keywords = ['spent', 'paid', 'bill', 'kharcha', 'gaya', 'purchase', 'bought', 'expense', 'petrol', 'food', 'diya']
 
-    # Priority 1: Strong credit phrases → Force Credit
     if any(phrase in text_lower for phrase in strong_credit_phrases):
         trans_type = "credit"
-    
-    # Priority 2: Normal keyword check
     elif any(kw in text_lower for kw in credit_keywords) and not any(kw in text_lower for kw in debit_keywords):
         trans_type = "credit"
-    
-    # Priority 3: Debit keywords
     elif any(kw in text_lower for kw in debit_keywords):
         trans_type = "debit"
-    
-    # Priority 4: Default to debit (common for expenses)
     else:
         trans_type = "debit"
 
-    # ==================== Category Detection ====================
     categories = {
         "Food": ["food", "khana", "lunch", "dinner", "snack"],
         "Petrol": ["petrol", "fuel"],
@@ -141,7 +141,7 @@ def parse_natural_command(text: str) -> dict:
     }
 
 # ============================================
-# Main Interface (Unchanged)
+# Main Voice Interface
 # ============================================
 def show_voice_interface(df, sheet):
     st.markdown("# 🎤 Smart Voice Assistant")
@@ -156,7 +156,7 @@ def show_voice_interface(df, sheet):
         if key not in st.session_state:
             st.session_state[key] = None
 
-    st.info("**How to use:** Click mic → Speak → Stop → Transcribe Audio")
+    st.info("**How to use:** Click the mic button → Speak clearly → Click Stop → Click **Transcribe Audio**")
 
     audio_segment = audiorecorder("🎙️ Click to Start Recording", "⏹️ Click to Stop Recording")
 
@@ -179,7 +179,7 @@ def show_voice_interface(df, sheet):
                     st.session_state.transcribed_text = text
                     st.session_state.parsed_data = parsed
                 else:
-                    st.warning("Could not understand. Try again.")
+                    st.warning("Could not understand speech. Try again.")
 
     with col2:
         if st.button("🗑️ Clear & Reset", use_container_width=True):
@@ -187,13 +187,11 @@ def show_voice_interface(df, sheet):
             st.session_state.transcribed_text = None
             st.rerun()
 
-    # Show Parsed Result
     if st.session_state.parsed_data is not None:
         st.markdown("---")
         parsed = st.session_state.parsed_data
 
         st.info(f"📝 **You said:** {st.session_state.transcribed_text}")
-        
         color = "green" if parsed['type'] == "credit" else "red"
         st.markdown(f"**Type:** <span style='color:{color}; font-weight:bold;'>{parsed['type'].upper()}</span>", unsafe_allow_html=True)
         st.json(parsed)
@@ -226,7 +224,6 @@ def show_voice_interface(df, sheet):
             st.session_state.transcribed_text = None
             st.rerun()
 
-    # Manual Entry
     st.markdown("---")
     st.subheader("✍️ Manual Entry")
     manual_text = st.text_input("Example: spent 500 on food or uncle gave me 500")
