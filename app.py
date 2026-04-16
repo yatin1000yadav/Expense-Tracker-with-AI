@@ -1,6 +1,10 @@
-
 import streamlit as st
 from streamlit_option_menu import option_menu
+import sys
+import os
+
+# Fix for Streamlit Cloud import issue
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from utils.voice_utils import show_voice_interface
 from utils.ocr_utils import show_ocr_page
@@ -42,7 +46,7 @@ def run():
         show_debit_form(df, sheet)
     elif selected == "Summary":
         show_summary(load_yearly_data(spreadsheet))
-    elif selected == "Scan Receipt":  # 👈 SIRF EK BAAR
+    elif selected == "Scan Receipt":
         show_ocr_page(df, sheet)
     elif selected == "Weekly Insights":
         generate_weekly_insights(df)
@@ -54,7 +58,5 @@ def run():
         filter_data(load_yearly_data(spreadsheet))
     elif selected == "AI Insights":
         show_ai_insights(load_yearly_data(spreadsheet))
-    elif selected == "Scan Receipt":
-        show_ocr_page(df, sheet)
     elif selected == "Voice":
         show_voice_interface(df, sheet)
