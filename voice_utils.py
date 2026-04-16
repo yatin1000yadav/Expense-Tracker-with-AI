@@ -1,4 +1,4 @@
-# utils/voice_utils.py - Final Cloud-Compatible Version
+# utils/voice_utils.py - Cloud Fixed Version (One-Go)
 
 import streamlit as st
 import whisper
@@ -9,14 +9,14 @@ import tempfile
 import os
 from io import BytesIO
 
-# Safe import for Streamlit Cloud
+# Safe Import for Streamlit Cloud
 try:
     from audiorecorder import audiorecorder
 except ImportError:
     try:
         from streamlit_audiorecorder import audiorecorder
     except ImportError:
-        st.error("❌ 'streamlit-audiorecorder' package is missing. Please check requirements.txt")
+        st.error("❌ streamlit-audiorecorder is not installed. Add it to requirements.txt")
         st.stop()
 
 from pydub import AudioSegment
@@ -33,16 +33,16 @@ def load_whisper_model():
         return None, str(e)
 
 # ============================================
-# AudioSegment to WAV bytes
+# Convert AudioSegment to WAV bytes
 # ============================================
-def audio_segment_to_wav_bytes(audio_segment: AudioSegment) -> bytes:
+def audio_segment_to_wav_bytes(audio_segment):
     buffer = BytesIO()
     audio_segment.export(buffer, format="wav")
     buffer.seek(0)
     return buffer.read()
 
 # ============================================
-# Transcribe
+# Transcribe Audio
 # ============================================
 def transcribe_audio(audio_segment, model):
     if audio_segment is None or audio_segment.duration_seconds < 0.5:
@@ -52,15 +52,10 @@ def transcribe_audio(audio_segment, model):
         tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
         with open(tmp.name, "wb") as f:
             f.write(wav_bytes)
-        
+
         result = model.transcribe(
             tmp.name,
-            initial_prompt=(
-                "This is an expense tracker. "
-                "Examples: spent 500 on food, paid 1200 electricity bill, "
-                "received salary 50000, uncle gave me 500 rupees added to credit, "
-                "salary mila, petrol kharcha 300."
-            ),
+            initial_prompt="Expense tracker examples: spent 500 on food, paid 1200 for electricity, received salary 50000, uncle gave me 500 rupees, salary mila, petrol 300.",
             temperature=0,
             language=None
         )
@@ -76,7 +71,7 @@ def transcribe_audio(audio_segment, model):
                 pass
 
 # ============================================
-# Parser (Improved Credit Detection)
+# Parser with Strong Credit Detection
 # ============================================
 WORD_TO_NUM = {
     "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5",
@@ -99,31 +94,24 @@ def parse_natural_command(text: str) -> dict:
     amounts = re.findall(r'\b(\d+(?:,\d{3})*(?:\.\d{1,2})?)\b', normalized)
     amount = max([float(a.replace(',', '')) for a in amounts]) if amounts else None
 
-    strong_credit_phrases = [
-        'gave me', 'uncle gave', 'aunty gave', 'received', 'salary', 'income', 
-        'credited', 'credit amount', 'added to credit', 'add to my credit', 
-        'mila', 'mil gaya', 'aa gaya', 'got', 'got paid'
-    ]
-
-    credit_keywords = ['salary', 'income', 'credited', 'received', 'refund', 'bonus', 'deposit', 'credit', 'mila', 'got']
-    debit_keywords = ['spent', 'paid', 'bill', 'kharcha', 'gaya', 'purchase', 'bought', 'expense', 'petrol', 'food', 'diya']
-
-    if any(phrase in text_lower for phrase in strong_credit_phrases):
+    # Strong Credit Detection
+    if any(phrase in text_lower for phrase in ['gave me', 'uncle gave', 'aunty gave', 'received', 'salary', 'income', 'credited', 'credit amount', 'mila', 'got paid']):
         trans_type = "credit"
-    elif any(kw in text_lower for kw in credit_keywords) and not any(kw in text_lower for kw in debit_keywords):
+    elif any(kw in text_lower for kw in ['salary', 'income', 'credited', 'received', 'mila', 'got']) and not any(kw in text_lower for kw in ['spent', 'paid', 'bill', 'kharcha', 'gaya', 'petrol', 'food']):
         trans_type = "credit"
-    elif any(kw in text_lower for kw in debit_keywords):
+    elif any(kw in text_lower for kw in ['spent', 'paid', 'bill', 'kharcha', 'gaya', 'purchase', 'bought', 'expense', 'petrol', 'food']):
         trans_type = "debit"
     else:
         trans_type = "debit"
 
+    # Category
     categories = {
-        "Food": ["food", "khana", "lunch", "dinner", "snack"],
+        "Food": ["food", "khana", "lunch", "dinner"],
         "Petrol": ["petrol", "fuel"],
-        "Bills": ["bill", "electricity", "recharge"],
+        "Bills": ["bill", "electricity"],
         "Shopping": ["shopping", "purchase"],
         "Salary": ["salary", "income"],
-        "Gift": ["uncle", "aunty", "gave me", "gift"],
+        "Gift": ["uncle", "aunty", "gave me"],
         "Other": []
     }
 
@@ -156,21 +144,21 @@ def show_voice_interface(df, sheet):
         if key not in st.session_state:
             st.session_state[key] = None
 
-    st.info("**How to use:** Click the mic button → Speak clearly → Click Stop → Click **Transcribe Audio**")
+    st.info("**How to use:** Click mic button → Speak → Stop → Click Transcribe Audio")
 
     audio_segment = audiorecorder("🎙️ Click to Start Recording", "⏹️ Click to Stop Recording")
 
     if audio_segment is not None and audio_segment.duration_seconds > 0.5:
-        st.success("✅ Audio recorded! Now click **Transcribe Audio**")
+        st.success("✅ Audio recorded! Click **Transcribe Audio**")
 
     col1, col2 = st.columns(2)
 
     with col1:
         if st.button("🔍 Transcribe Audio", type="primary", use_container_width=True):
             if audio_segment is None or audio_segment.duration_seconds < 0.5:
-                st.error("❌ Please record audio first.")
+                st.error("❌ Please record first.")
             else:
-                with st.spinner("🎙️ Transcribing..."):
+                with st.spinner("Transcribing..."):
                     text = transcribe_audio(audio_segment, model)
 
                 if text:
@@ -187,6 +175,7 @@ def show_voice_interface(df, sheet):
             st.session_state.transcribed_text = None
             st.rerun()
 
+    # Confirm & Save
     if st.session_state.parsed_data is not None:
         st.markdown("---")
         parsed = st.session_state.parsed_data
@@ -196,28 +185,27 @@ def show_voice_interface(df, sheet):
         st.markdown(f"**Type:** <span style='color:{color}; font-weight:bold;'>{parsed['type'].upper()}</span>", unsafe_allow_html=True)
         st.json(parsed)
 
-        override_type = st.radio("Correct the type if needed:", ["credit", "debit"], 
-                                 index=0 if parsed['type'] == "credit" else 1, horizontal=True)
-        st.session_state.parsed_data['type'] = override_type
+        override = st.radio("Correct type:", ["credit", "debit"], 
+                            index=0 if parsed['type']=="credit" else 1, horizontal=True)
+        st.session_state.parsed_data['type'] = override
 
         if st.button("✅ Confirm Entry & Save to Sheet", type="primary"):
             date = datetime.now().strftime('%d-%m-%Y')
             month = datetime.now().strftime('%B')
 
             if parsed['type'] == 'credit':
-                new_row = {'date': date, 'month': month, 'credit': parsed['amount'], 
-                           'credit_details': parsed['details'], 'debit': 0, 'debit_details': 'NA',
-                           'category': parsed['category']}
+                new_row = {'date': date, 'month': month, 'credit': parsed['amount'], 'credit_details': parsed['details'],
+                           'debit': 0, 'debit_details': 'NA', 'category': parsed['category']}
             else:
                 new_row = {'date': date, 'month': month, 'credit': 0, 'credit_details': 'NA',
-                           'debit': -parsed['amount'] if parsed['amount'] else 0, 
-                           'debit_details': parsed['details'], 'category': parsed['category']}
+                           'debit': -parsed['amount'] if parsed['amount'] else 0, 'debit_details': parsed['details'],
+                           'category': parsed['category']}
 
             from utils.gsheet_utils import update_data_to_gsheet
             new_df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
             update_data_to_gsheet(sheet, new_df)
 
-            st.success("✅ Transaction saved successfully!")
+            st.success("✅ Saved successfully!")
             st.balloons()
 
             st.session_state.parsed_data = None
@@ -226,10 +214,10 @@ def show_voice_interface(df, sheet):
 
     st.markdown("---")
     st.subheader("✍️ Manual Entry")
-    manual_text = st.text_input("Example: spent 500 on food or uncle gave me 500")
+    manual = st.text_input("Type here (e.g. uncle gave me 500 or spent 300 on food)")
     if st.button("Process Manual Text"):
-        if manual_text.strip():
-            result = parse_natural_command(manual_text)
-            st.session_state.transcribed_text = manual_text
+        if manual.strip():
+            result = parse_natural_command(manual)
+            st.session_state.transcribed_text = manual
             st.session_state.parsed_data = result
             st.rerun()
