@@ -26,6 +26,8 @@ st.set_page_config(
 def _boot():
     # ── All imports are inside _boot() ── intentional, do NOT move up ────────
     import json, bcrypt, os
+    import sys, os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import app
 
     # =========================================================================
