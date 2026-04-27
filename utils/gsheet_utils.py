@@ -128,10 +128,12 @@ def load_data_from_gsheet():
                 return df, worksheet, spreadsheet
             except Exception as e:
                 st.error(f"❌ Error loading sample data: {e}")
-                return pd.DataFrame(), None, None
+                return pd.DataFrame(columns=["date", "month", "credit", "credit_details", "debit", "debit_details", "category"]), None, None
         else:
-            st.error("❌ Sample data not found.")
-            return pd.DataFrame(), None, None
+            st.warning("⚠️ No database connected. Using temporary empty storage.")
+            empty_df = pd.DataFrame(columns=["date", "month", "credit", "credit_details", "debit", "debit_details", "category"])
+            spreadsheet = MockSpreadsheet(empty_df)
+            return empty_df, spreadsheet.sheet, spreadsheet
 
     try:
         client       = get_gspread_client()
