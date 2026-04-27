@@ -153,8 +153,17 @@ def load_yearly_data(spreadsheet):
     yearly_data = {}
 
     if isinstance(spreadsheet, MockSpreadsheet):
-        # ✅ FIX: always use the latest in-memory df (reflects new entries)
-        df = spreadsheet.sheet.df.copy()
+        # ✅ FIX: always prefer live_df from session_state so OCR/Voice entries
+        #         are reflected immediately in AI Insights (and all other views).
+        #         spreadsheet.sheet.df may be stale if MockSheet.update() wrote
+        #         to live_df but a new MockSpreadsheet was constructed from the
+        #         old df reference.
+        if "live_df" in st.session_state and st.session_state["live_df"] is not None:
+            df = st.session_state["live_df"].copy()
+        else:
+            df = spreadsheet.sheet.df.copy()
+        # Also sync the sheet's internal df so downstream callers stay consistent
+        spreadsheet.sheet.df = df
         df['credit'] = pd.to_numeric(df.get('credit', 0), errors='coerce').fillna(0)
         df['debit']  = pd.to_numeric(df.get('debit',  0), errors='coerce').fillna(0)
         if 'year' not in df.columns:
