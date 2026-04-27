@@ -26,7 +26,7 @@ st.set_page_config(
 def _boot():
     # ── All imports are inside _boot() ── intentional, do NOT move up ────────
     import json, bcrypt, os
-    import utils.app as app
+    import app
 
     # =========================================================================
     #  GLOBAL LUXURY THEME
