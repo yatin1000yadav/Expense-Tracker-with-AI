@@ -26,9 +26,7 @@ st.set_page_config(
 def _boot():
     # ── All imports are inside _boot() ── intentional, do NOT move up ────────
     import json, bcrypt, os
-    import sys, os
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    import app
+    import utils.app as app
 
     # =========================================================================
     #  GLOBAL LUXURY THEME
@@ -360,14 +358,16 @@ nav ul li a.active{background:linear-gradient(135deg,var(--gold) 0%,var(--gold-l
     #  SESSION INIT
     # =========================================================================
     auth = _load_auth()
-    if not auth.get("users"):
+    
+    # PERMANENT HARDCODED ACCOUNT (Survives Render Resets)
+    # The server will automatically recreate this account if the drive gets wiped.
+    if "admin" not in auth.setdefault("users", {}):
         auth["users"]["admin"] = {
-            "hash": _hash("admin123"),
+            "hash": _hash("admin123"), 
             "security_q": SECURITY_QUESTIONS[0],
             "security_a": _hash("fluffy"),
         }
         _save_auth(auth)
-        st.toast("⚠️ Default account — username: admin / password: admin123", icon="🔑")
 
     for key, default in [("authenticated", False), ("current_user", ""), ("auth_page", "login")]:
         if key not in st.session_state:
