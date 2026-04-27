@@ -67,8 +67,21 @@ class MockSpreadsheet:
         return self
 
 
+import json
+
 # ✅ Authentication & client initialization
 def get_gspread_client():
+    # Priority: Read from Render Environment Variable securely
+    if "GOOGLE_CREDENTIALS_JSON" in os.environ:
+        try:
+            creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS_JSON"])
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, GSHEET_SCOPE)
+            return gspread.authorize(creds)
+        except Exception as e:
+            st.error(f"Error parsing GOOGLE_CREDENTIALS_JSON: {e}")
+            raise e
+    
+    # Fallback: Read from local JSON file
     creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_PATH, GSHEET_SCOPE)
     return gspread.authorize(creds)
 
