@@ -9,5 +9,4 @@ env/
 .pytest_cache/
 auth.json
 users.json
-sample_data/
-config/
+config/your-service-account.json
