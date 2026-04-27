@@ -1,7 +1,6 @@
 # utils/voice_utils.py - Fixed & Improved Version
 
 import streamlit as st
-import whisper
 import re
 import pandas as pd
 from datetime import datetime
@@ -9,17 +8,30 @@ import tempfile
 import os
 from io import BytesIO
 
+# Safe import for whisper
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+
 # Safe import for audiorecorder
 try:
     from audiorecorder import audiorecorder
+    AUDIO_AVAILABLE = True
 except ImportError:
     try:
         from streamlit_audiorecorder import audiorecorder
+        AUDIO_AVAILABLE = True
     except ImportError:
-        st.error("❌ 'streamlit-audiorecorder' package is missing. Please check requirements.txt")
-        st.stop()
+        AUDIO_AVAILABLE = False
 
-from pydub import AudioSegment
+# Safe import for pydub
+try:
+    from pydub import AudioSegment
+    PYDUB_AVAILABLE = True
+except ImportError:
+    PYDUB_AVAILABLE = False
 
 
 # ============================================================
@@ -27,6 +39,8 @@ from pydub import AudioSegment
 # ============================================================
 @st.cache_resource
 def load_whisper_model():
+    if not WHISPER_AVAILABLE:
+        return None, "Whisper not installed"
     try:
         model = whisper.load_model("base", device="cpu")
         return model, None
@@ -37,7 +51,7 @@ def load_whisper_model():
 # ============================================================
 # AudioSegment → WAV bytes
 # ============================================================
-def audio_segment_to_wav_bytes(audio_segment: AudioSegment) -> bytes:
+def audio_segment_to_wav_bytes(audio_segment) -> bytes:
     buffer = BytesIO()
     audio_segment.export(buffer, format="wav")
     buffer.seek(0)
@@ -48,6 +62,8 @@ def audio_segment_to_wav_bytes(audio_segment: AudioSegment) -> bytes:
 # Transcribe with Whisper
 # ============================================================
 def transcribe_audio(audio_segment, model):
+    if model is None:
+        return None
     if audio_segment is None or audio_segment.duration_seconds < 0.5:
         return None
     tmp_path = None
@@ -82,9 +98,7 @@ def transcribe_audio(audio_segment, model):
 
 
 # ============================================================
-# BUG FIX ✅ — Indian number unit parser
-# Handles crore/crores/lakh/lakhs/thousand + compound forms
-# e.g. "2 crore 50 lakh", "20 crores", "five lakh", "3 thousand"
+# Indian number unit parser
 # ============================================================
 
 WORD_TO_NUM = {
@@ -97,7 +111,6 @@ WORD_TO_NUM = {
     "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
 }
 
-# Largest units first — order matters for correct parsing
 INDIAN_UNITS = [
     (r'\barab s?\b',    1_000_000_000),
     (r'\bcrores?\b',    10_000_000),
@@ -110,17 +123,12 @@ INDIAN_UNITS = [
 
 
 def _words_to_base_number(text: str) -> str:
-    """Replace English word-numbers with digits (one→1, twenty→20, etc.)."""
     for word, val in sorted(WORD_TO_NUM.items(), key=lambda x: -len(x[0])):
         text = re.sub(rf'\b{word}\b', str(val), text, flags=re.IGNORECASE)
     return text
 
 
 def _collapse_indian_units(text: str) -> str:
-    """
-    Convert 'N unit' pairs into their numeric value.
-    Handles compound expressions: '2 crore 50 lakh' → 25000000
-    """
     for pattern, multiplier in INDIAN_UNITS:
         new_text = ""
         last_end = 0
@@ -138,8 +146,6 @@ def _collapse_indian_units(text: str) -> str:
         new_text += text[last_end:]
         text = new_text
 
-    # Sum adjacent large numbers from compound expressions
-    # e.g. "10000000 500000" (20 crore 5 lakh) → "10500000"
     for _ in range(3):
         text = re.sub(
             r'\b(\d{3,})\s+(\d{3,})\b',
@@ -150,7 +156,6 @@ def _collapse_indian_units(text: str) -> str:
 
 
 def normalize_spoken_numbers(text: str) -> str:
-    """Full pipeline: strip currency noise → word→digit → Indian units."""
     text = re.sub(r'\b(rupees?|rs\.?|inr|₹)\b', '', text, flags=re.IGNORECASE)
     text = _words_to_base_number(text)
     text = _collapse_indian_units(text)
@@ -194,11 +199,9 @@ def parse_natural_command(text: str) -> dict:
     text_lower = text.lower().strip()
     normalized = normalize_spoken_numbers(text_lower)
 
-    # Extract all numbers from normalized string, pick largest as amount
     amounts = re.findall(r'\b(\d+(?:,\d{3})*(?:\.\d{1,2})?)\b', normalized)
     amount  = max([float(a.replace(',', '')) for a in amounts]) if amounts else None
 
-    # ── Transaction type ────────────────────────────────────────────────────
     if any(phrase in text_lower for phrase in STRONG_CREDIT_PHRASES):
         trans_type = "credit"
     elif any(kw in text_lower for kw in CREDIT_KEYWORDS) and \
@@ -209,7 +212,6 @@ def parse_natural_command(text: str) -> dict:
     else:
         trans_type = "debit"
 
-    # ── Category ────────────────────────────────────────────────────────────
     CATEGORIES = {
         "Food":        ["food", "khana", "lunch", "dinner", "snack", "breakfast",
                         "meal", "swiggy", "zomato", "blinkit"],
@@ -277,48 +279,54 @@ def show_voice_interface(df, sheet):
     st.markdown("# 🎤 Smart Voice Assistant")
     st.markdown("---")
 
-    model, error = load_whisper_model()
-    if error:
-        st.error(f"❌ Whisper load failed: {error}")
-        return
+    # Show warning if voice features unavailable but don't crash
+    if not WHISPER_AVAILABLE or not AUDIO_AVAILABLE or not PYDUB_AVAILABLE:
+        st.warning("⚠️ Voice recording is not available in this environment. Use Manual Entry below.")
+        model = None
+    else:
+        model, error = load_whisper_model()
+        if error:
+            st.warning(f"⚠️ Voice model unavailable: {error}. Use Manual Entry below.")
+            model = None
 
     for key in ['parsed_data', 'transcribed_text']:
         if key not in st.session_state:
             st.session_state[key] = None
 
-    st.info("**How to use:** Click the mic → Speak clearly → Click Stop → Click **Transcribe Audio**")
+    if model is not None and AUDIO_AVAILABLE:
+        st.info("**How to use:** Click the mic → Speak clearly → Click Stop → Click **Transcribe Audio**")
 
-    audio_segment = audiorecorder(
-        "🎙️ Click to Start Recording",
-        "⏹️ Click to Stop Recording",
-    )
+        audio_segment = audiorecorder(
+            "🎙️ Click to Start Recording",
+            "⏹️ Click to Stop Recording",
+        )
 
-    if audio_segment is not None and audio_segment.duration_seconds > 0.5:
-        st.success("✅ Audio recorded! Now click **Transcribe Audio**")
+        if audio_segment is not None and audio_segment.duration_seconds > 0.5:
+            st.success("✅ Audio recorded! Now click **Transcribe Audio**")
 
-    col1, col2 = st.columns(2)
+        col1, col2 = st.columns(2)
 
-    with col1:
-        if st.button("🔍 Transcribe Audio", type="primary", use_container_width=True):
-            if audio_segment is None or audio_segment.duration_seconds < 0.5:
-                st.error("❌ Please record audio first.")
-            else:
-                with st.spinner("🎙️ Transcribing..."):
-                    text = transcribe_audio(audio_segment, model)
-
-                if text:
-                    st.info(f"💬 **Heard:** {text}")
-                    parsed = parse_natural_command(text)
-                    st.session_state.transcribed_text = text
-                    st.session_state.parsed_data      = parsed
+        with col1:
+            if st.button("🔍 Transcribe Audio", type="primary", use_container_width=True):
+                if audio_segment is None or audio_segment.duration_seconds < 0.5:
+                    st.error("❌ Please record audio first.")
                 else:
-                    st.warning("Could not understand speech. Try again.")
+                    with st.spinner("🎙️ Transcribing..."):
+                        text = transcribe_audio(audio_segment, model)
 
-    with col2:
-        if st.button("🗑️ Clear & Reset", use_container_width=True):
-            st.session_state.parsed_data      = None
-            st.session_state.transcribed_text = None
-            st.rerun()
+                    if text:
+                        st.info(f"💬 **Heard:** {text}")
+                        parsed = parse_natural_command(text)
+                        st.session_state.transcribed_text = text
+                        st.session_state.parsed_data      = parsed
+                    else:
+                        st.warning("Could not understand speech. Try again.")
+
+        with col2:
+            if st.button("🗑️ Clear & Reset", use_container_width=True):
+                st.session_state.parsed_data      = None
+                st.session_state.transcribed_text = None
+                st.rerun()
 
     # ── Parsed result & confirmation UI ────────────────────────────────────
     if st.session_state.parsed_data is not None:
