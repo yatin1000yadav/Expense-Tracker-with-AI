@@ -1,18 +1,24 @@
+# ── Core Streamlit ──────────────────────────────────────────────
 streamlit>=1.35.0
 streamlit-option-menu>=0.3.6
 
-# Voice Feature - Must have these two
+# ── Voice Assistant (Important for Cloud) ───────────────────────
 streamlit-audiorecorder
 pydub
 openai-whisper>=20231117
 
-# Google Sheets
+# ── Google Sheets ───────────────────────────────────────────────
 gspread>=6.0.0
 oauth2client>=4.1.3
 
-# Others
+# ── Data & Visualisation ─────────────────────────────────────────
 pandas>=2.1.0
 numpy>=1.26.0
 plotly>=5.18.0
+
+# ── OCR (if you still use it) ───────────────────────────────────
+pytesseract>=0.3.10
 Pillow>=10.0.0
+
+# ── Auth ─────────────────────────────────────────────────────────
 bcrypt>=4.1.2
