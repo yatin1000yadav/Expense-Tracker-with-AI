@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+.git/
+.env
+.pytest_cache/
+auth.json
+users.json
+sample_data/
+config/
