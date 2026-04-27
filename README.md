@@ -1,5 +1,3 @@
-# Expense-Tracker-with-AI
-Expense Tracker — AI-powered Personal Finance Dashboard  
 # 💸 Expense Tracker — AI-powered Personal Finance Dashboard  
 
 A **privacy-first, AI-assisted expense tracker** built with **Streamlit**, **Google Sheets**, and **Pandas**.  
