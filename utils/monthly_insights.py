@@ -114,6 +114,11 @@ def get_avg_daily_spend(data):
 def generate_monthly_insights(data):
     st.markdown("## ⚖️ Monthly Spending vs Income")
 
+    # Guard: no data available yet (offline / no DB)
+    if data is None or data.empty or 'debit' not in data.columns:
+        st.info("📭 No transaction data available yet. Add some Credit or Debit entries to see insights.")
+        return
+
     data    = prepare_data(data)
     summary = get_monthly_summary(data)
 
