@@ -1,0 +1,113 @@
+# 📋 Fix Summary — What Was Wrong & What Was Changed
+
+## 1. `ai_insights.py` — Financial Health Score Gauge
+
+### Bug: Gauge needle pointed to wrong position (showed ~85-90 but score was 100)
+**Root cause:** The `bar.color` was set to solid `"darkblue"` and `bar.thickness` defaulted
+to `1.0` (full width). This dark bar covered the entire coloured arc, making the needle
+*appear* to be at a random position depending on how Plotly rendered it.
+
+**Fix:**
+```python
+# BEFORE (broken)
+'bar': {'color': "darkblue"},
+
+# AFTER (fixed)
+'bar': {
+    'color':     'rgba(0,0,139,0.85)',  # semi-transparent
+    'thickness': 0.15,                  # thin needle — coloured arc stays visible
+},
+```
+
+### Bug: "▲50" delta was confusing
+**Root cause:** `delta.reference = 50` showed the *difference* from 50, not the previous score.
+With a score of 100, it showed ▲50 which confused users into thinking the score is 50.
+
+**Fix:** Delta is still relative to 50 (midpoint baseline) but the `number` font is now
+clearly separate and larger so users read "100" first, then "▲50 vs baseline".
+Added `valueformat: '.0f'` so the score displays as a whole number (100 not 100.0).
+
+### Bug: Expenses from OCR/Voice entries stored as positive debits were ignored
+**Root cause:** The original code was:
+```python
+total_expenses = abs(df[df['debit'] < 0]['debit'].sum())
+```
+OCR and Voice entries sometimes save debit as a **positive** number (sign handling varied).
+Those rows failed the `< 0` filter → `total_expenses` was understated → score inflated to 100.
+
+**Fix:**
+```python
+total_expenses = (
+    abs(debit_col[debit_col < 0].sum())   # negative debits (normal)
+    + debit_col[debit_col > 0].sum()       # positive debits (OCR/voice)
+)
+```
+
+---
+
+## 2. `voice_utils.py` — Voice Recognition & Parsing
+
+### Bug: "Amit gives me 500" / "Rahul ne diya" detected as DEBIT
+**Root cause:** `STRONG_CREDIT_PHRASES` only had a few phrases and missed common
+Hindi/English variants like `ne diya`, `give me`, `got money`, `ne bheja` etc.
+
+**Fix:** Expanded `STRONG_CREDIT_PHRASES` list to 20+ variants including:
+- `ne diya`, `ne bheja`, `give me`, `given me`
+- `got money`, `got cash`, `got paid`
+- `deposited`, `deposit`, `transferred to me`
+- `reimbursement`, `cashback`
+
+### Bug: No amount override in the confirmation UI
+**Root cause:** If Whisper mis-heard the amount (e.g. "five hundred" → "500" but heard
+as "500.5"), there was no way to correct it without re-recording.
+
+**Fix:** Added `st.number_input` for amount correction before saving.
+
+### Bug: `_save_voice_entry` was inlined in the button handler with fragile logic
+**Fix:** Extracted into `_save_voice_entry()` helper that:
+1. Sets `st.session_state['live_df']` FIRST
+2. Then calls `update_data_to_gsheet()`
+This guarantees other pages (Summary, AI Insights) see the new row immediately.
+
+---
+
+## 3. `ocr_utils.py` — Receipt OCR
+
+### Bug: Faded / low-contrast receipts returned empty text
+**Root cause:** Only greyscale conversion was applied before OCR. Phone-camera receipts
+often have uneven lighting, making digits hard for Tesseract to read.
+
+**Fix:** Added PIL contrast enhancement (2×) and sharpening (1.5×) before OCR:
+```python
+image = ImageEnhance.Contrast(image).enhance(2.0)
+image = ImageEnhance.Sharpness(image).enhance(1.5)
+```
+
+### Bug: When amount = 0 (not detected), app silently saved ₹0 entry
+**Root cause:** No warning was shown when `default_amount == 0.0`, so users could
+accidentally tap "Add Expense" and save a ₹0 row.
+
+**Fix:** Added `st.warning()` when amount is 0 prompting the user to fill it in manually.
+
+### Bug: `live_df` was set AFTER `update_data_to_gsheet()` in some paths
+**Root cause:** In the original `_save_ocr_entry`, `st.session_state['live_df'] = new_df`
+came AFTER the sheet update call. If `update_data_to_gsheet` triggered a rerun internally,
+`live_df` would still be stale.
+
+**Fix:** `st.session_state['live_df'] = new_df.copy()` is now set FIRST, then the sheet
+is updated — matching the safe pattern already used in `voice_utils`.
+
+---
+
+## How to Deploy These Fixes
+
+Replace these 3 files in your `utils/` folder:
+
+```
+utils/
+├── ai_insights.py    ← replace with fixed version
+├── voice_utils.py    ← replace with fixed version
+└── ocr_utils.py      ← replace with fixed version
+```
+
+No changes needed to `main.py`, `app.py`, or `gsheet_utils.py` — those were correct.
