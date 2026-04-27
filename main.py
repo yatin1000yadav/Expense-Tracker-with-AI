@@ -26,7 +26,7 @@ st.set_page_config(
 def _boot():
     # ── All imports are inside _boot() ── intentional, do NOT move up ────────
     import json, bcrypt, os
-    import app
+    import utils.app as app
 
     # =========================================================================
     #  GLOBAL LUXURY THEME
@@ -441,7 +441,9 @@ nav ul li a.active{background:linear-gradient(135deg,var(--gold) 0%,var(--gold-l
     try:
         app.run()
     except Exception as e:
+        import traceback
         st.error(f"Error in app: {e}")
+        st.code(traceback.format_exc(), language="python")
         st.info("Make sure all files are present in the utils folder.")
 
 
