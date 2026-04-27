@@ -7,6 +7,11 @@ from datetime import datetime
 def generate_weekly_insights(df):
     st.subheader("📆 Weekly Credit vs Debit")
 
+    # Guard: no data available yet (offline / no DB)
+    if df is None or df.empty or 'debit' not in df.columns:
+        st.info("📭 No transaction data available yet. Add some Credit or Debit entries to see insights.")
+        return
+
     # BUG FIX ✅: Coerce numeric before any filtering
     df = df.copy()
     df['debit']  = pd.to_numeric(df['debit'],  errors='coerce').fillna(0)
