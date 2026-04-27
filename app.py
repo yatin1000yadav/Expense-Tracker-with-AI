@@ -44,6 +44,16 @@ def run():
 
     # Load and prepare data
     df, sheet, spreadsheet = load_data_from_gsheet()
+
+    # ── Safety: ensure all required columns exist even on empty/offline df ──
+    REQUIRED_COLS = {
+        "date": "", "month": "", "credit": 0, "credit_details": "",
+        "debit": 0, "debit_details": "", "category": ""
+    }
+    for col, default in REQUIRED_COLS.items():
+        if col not in df.columns:
+            df[col] = default
+
     df = filter_old_records(df)
 
     # 📦 Route to selected feature
