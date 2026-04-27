@@ -179,8 +179,8 @@ def load_yearly_data(spreadsheet):
             df = spreadsheet.sheet.df.copy()
         # Also sync the sheet's internal df so downstream callers stay consistent
         spreadsheet.sheet.df = df
-        df['credit'] = pd.to_numeric(df.get('credit', 0), errors='coerce').fillna(0)
-        df['debit']  = pd.to_numeric(df.get('debit',  0), errors='coerce').fillna(0)
+        df['credit'] = pd.to_numeric(df['credit'] if 'credit' in df.columns else 0, errors='coerce').fillna(0)
+        df['debit']  = pd.to_numeric(df['debit']  if 'debit'  in df.columns else 0, errors='coerce').fillna(0)
         if 'year' not in df.columns:
             df['year'] = str(datetime.now().year)
         yearly_data[spreadsheet.sheet.title] = df
@@ -191,7 +191,7 @@ def load_yearly_data(spreadsheet):
             df = pd.DataFrame(sheet.get_all_records())
             if not df.empty:
                 df['year']   = sheet.title.split('-')[-1]
-                df['credit'] = pd.to_numeric(df.get('credit', 0), errors='coerce').fillna(0)
-                df['debit']  = pd.to_numeric(df.get('debit',  0), errors='coerce').fillna(0)
+                df['credit'] = pd.to_numeric(df['credit'] if 'credit' in df.columns else 0, errors='coerce').fillna(0)
+                df['debit']  = pd.to_numeric(df['debit']  if 'debit'  in df.columns else 0, errors='coerce').fillna(0)
                 yearly_data[sheet.title] = df
     return yearly_data
