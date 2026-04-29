@@ -5,7 +5,7 @@ streamlit-option-menu>=0.3.6
 # ── Voice Assistant (Important for Cloud) ───────────────────────
 streamlit-audiorecorder
 pydub
-openai-whisper>=20231117
+SpeechRecognition
 
 # ── Google Sheets ───────────────────────────────────────────────
 gspread>=6.0.0
