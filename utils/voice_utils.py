@@ -8,12 +8,12 @@ import tempfile
 import os
 from io import BytesIO
 
-# Safe import for whisper
+# Safe import for SpeechRecognition
 try:
-    import whisper
-    WHISPER_AVAILABLE = True
+    import speech_recognition as sr
+    SR_AVAILABLE = True
 except ImportError:
-    WHISPER_AVAILABLE = False
+    SR_AVAILABLE = False
 
 # Safe import for audiorecorder
 try:
@@ -34,18 +34,7 @@ except ImportError:
     PYDUB_AVAILABLE = False
 
 
-# ============================================================
-# Load Whisper Model (cached so it only loads once)
-# ============================================================
-@st.cache_resource
-def load_whisper_model():
-    if not WHISPER_AVAILABLE:
-        return None, "Whisper not installed"
-    try:
-        model = whisper.load_model("tiny", device="cpu")
-        return model, None
-    except Exception as e:
-        return None, str(e)
+# (Removed local Whisper model loading to save memory on Render)
 
 
 # ============================================================
@@ -59,42 +48,35 @@ def audio_segment_to_wav_bytes(audio_segment) -> bytes:
 
 
 # ============================================================
-# Transcribe with Whisper
+# Transcribe with Google Speech Recognition API
 # ============================================================
-def transcribe_audio(audio_segment, model):
-    if model is None:
+def transcribe_audio(audio_segment):
+    if not SR_AVAILABLE:
+        st.error("SpeechRecognition library not available.")
         return None
     if audio_segment is None or audio_segment.duration_seconds < 0.5:
         return None
-    tmp_path = None
+    
     try:
         wav_bytes = audio_segment_to_wav_bytes(audio_segment)
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            tmp.write(wav_bytes)
-            tmp_path = tmp.name
-
-        result = model.transcribe(
-            tmp_path,
-            initial_prompt=(
-                "This is an expense tracker. "
-                "Examples: spent 500 on food, paid 1200 electricity bill, "
-                "received salary 50000, uncle gave me 500 rupees added to credit, "
-                "salary mila, petrol kharcha 300, won 20 crores in KBC, "
-                "received 5 lakh salary, paid 2 lakh 50 thousand for rent."
-            ),
-            temperature=0,
-            language=None,
-        )
-        return result["text"].strip()
+        audio_file = BytesIO(wav_bytes)
+        
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(audio_file) as source:
+            audio_data = recognizer.record(source)
+            
+        # Using Google's free Web Speech API (en-IN for Indian English context)
+        text = recognizer.recognize_google(audio_data, language='en-IN')
+        return text.strip()
+    except sr.UnknownValueError:
+        st.warning("Speech Recognition could not understand the audio.")
+        return None
+    except sr.RequestError as e:
+        st.error(f"Could not request results from Google Speech Recognition service; {e}")
+        return None
     except Exception as e:
         st.error(f"Transcription error: {str(e)}")
         return None
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
 
 
 # ============================================================
@@ -280,7 +262,7 @@ def show_voice_interface(df, sheet):
     st.markdown("---")
 
     # Show warning if voice features unavailable but don't crash
-    if not WHISPER_AVAILABLE or not AUDIO_AVAILABLE or not PYDUB_AVAILABLE:
+    if not SR_AVAILABLE or not AUDIO_AVAILABLE or not PYDUB_AVAILABLE:
         st.warning("⚠️ Voice recording is not available in this environment. Use Manual Entry below.")
     else:
         for key in ['parsed_data', 'transcribed_text']:
@@ -304,19 +286,13 @@ def show_voice_interface(df, sheet):
                 if audio_segment is None or audio_segment.duration_seconds < 0.5:
                     st.error("❌ Please record audio first.")
                 else:
-                    with st.spinner("🎙️ Loading AI voice model & Transcribing..."):
-                        model, error = load_whisper_model()
-                        if error:
-                            st.error(f"⚠️ Voice model unavailable: {error}. Use Manual Entry below.")
-                        else:
-                            text = transcribe_audio(audio_segment, model)
-                            if text:
-                                st.info(f"💬 **Heard:** {text}")
-                                parsed = parse_natural_command(text)
-                                st.session_state.transcribed_text = text
-                                st.session_state.parsed_data      = parsed
-                            else:
-                                st.warning("Could not understand speech. Try again.")
+                    with st.spinner("🎙️ Transcribing with Google Speech API..."):
+                        text = transcribe_audio(audio_segment)
+                        if text:
+                            st.info(f"💬 **Heard:** {text}")
+                            parsed = parse_natural_command(text)
+                            st.session_state.transcribed_text = text
+                            st.session_state.parsed_data      = parsed
 
         with col2:
             if st.button("🗑️ Clear & Reset", use_container_width=True):
