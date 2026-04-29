@@ -42,7 +42,7 @@ def load_whisper_model():
     if not WHISPER_AVAILABLE:
         return None, "Whisper not installed"
     try:
-        model = whisper.load_model("base", device="cpu")
+        model = whisper.load_model("tiny", device="cpu")
         return model, None
     except Exception as e:
         return None, str(e)
@@ -282,18 +282,11 @@ def show_voice_interface(df, sheet):
     # Show warning if voice features unavailable but don't crash
     if not WHISPER_AVAILABLE or not AUDIO_AVAILABLE or not PYDUB_AVAILABLE:
         st.warning("⚠️ Voice recording is not available in this environment. Use Manual Entry below.")
-        model = None
     else:
-        model, error = load_whisper_model()
-        if error:
-            st.warning(f"⚠️ Voice model unavailable: {error}. Use Manual Entry below.")
-            model = None
+        for key in ['parsed_data', 'transcribed_text']:
+            if key not in st.session_state:
+                st.session_state[key] = None
 
-    for key in ['parsed_data', 'transcribed_text']:
-        if key not in st.session_state:
-            st.session_state[key] = None
-
-    if model is not None and AUDIO_AVAILABLE:
         st.info("**How to use:** Click the mic → Speak clearly → Click Stop → Click **Transcribe Audio**")
 
         audio_segment = audiorecorder(
@@ -311,16 +304,19 @@ def show_voice_interface(df, sheet):
                 if audio_segment is None or audio_segment.duration_seconds < 0.5:
                     st.error("❌ Please record audio first.")
                 else:
-                    with st.spinner("🎙️ Transcribing..."):
-                        text = transcribe_audio(audio_segment, model)
-
-                    if text:
-                        st.info(f"💬 **Heard:** {text}")
-                        parsed = parse_natural_command(text)
-                        st.session_state.transcribed_text = text
-                        st.session_state.parsed_data      = parsed
-                    else:
-                        st.warning("Could not understand speech. Try again.")
+                    with st.spinner("🎙️ Loading AI voice model & Transcribing..."):
+                        model, error = load_whisper_model()
+                        if error:
+                            st.error(f"⚠️ Voice model unavailable: {error}. Use Manual Entry below.")
+                        else:
+                            text = transcribe_audio(audio_segment, model)
+                            if text:
+                                st.info(f"💬 **Heard:** {text}")
+                                parsed = parse_natural_command(text)
+                                st.session_state.transcribed_text = text
+                                st.session_state.parsed_data      = parsed
+                            else:
+                                st.warning("Could not understand speech. Try again.")
 
         with col2:
             if st.button("🗑️ Clear & Reset", use_container_width=True):
