@@ -109,7 +109,7 @@ def load_data_from_gsheet():
         return df, spreadsheet.sheet, spreadsheet
 
     # If credentials missing → use sample data (offline mode)
-    if not os.path.exists(CREDENTIALS_PATH):
+    if not os.path.exists(CREDENTIALS_PATH) and "GOOGLE_CREDENTIALS_JSON" not in os.environ:
         if "sample_data_loaded" not in st.session_state:
             st.toast("⚠️ Using Local Sample Data (Offline Mode)", icon="📂")
             st.session_state["sample_data_loaded"] = True
