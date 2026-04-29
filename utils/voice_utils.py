@@ -184,16 +184,6 @@ def parse_natural_command(text: str) -> dict:
     amounts = re.findall(r'\b(\d+(?:,\d{3})*(?:\.\d{1,2})?)\b', normalized)
     amount  = max([float(a.replace(',', '')) for a in amounts]) if amounts else None
 
-    if any(phrase in text_lower for phrase in STRONG_CREDIT_PHRASES):
-        trans_type = "credit"
-    elif any(kw in text_lower for kw in CREDIT_KEYWORDS) and \
-            not any(kw in text_lower for kw in DEBIT_KEYWORDS):
-        trans_type = "credit"
-    elif any(kw in text_lower for kw in DEBIT_KEYWORDS):
-        trans_type = "debit"
-    else:
-        trans_type = "debit"
-
     CATEGORIES = {
         "Food":        ["food", "khana", "lunch", "dinner", "snack", "breakfast",
                         "meal", "swiggy", "zomato", "blinkit"],
@@ -214,6 +204,21 @@ def parse_natural_command(text: str) -> dict:
         if any(kw in text_lower for kw in kws):
             detected_category = cat
             break
+
+    INCOME_CATEGORIES = ["Salary", "Prize", "Gift", "Side Income"]
+
+    if any(phrase in text_lower for phrase in STRONG_CREDIT_PHRASES):
+        trans_type = "credit"
+    elif any(kw in text_lower for kw in CREDIT_KEYWORDS) and \
+            not any(kw in text_lower for kw in DEBIT_KEYWORDS):
+        trans_type = "credit"
+    elif any(kw in text_lower for kw in DEBIT_KEYWORDS):
+        trans_type = "debit"
+    else:
+        if detected_category in INCOME_CATEGORIES:
+            trans_type = "credit"
+        else:
+            trans_type = "debit"
 
     return {
         'amount':   amount,
